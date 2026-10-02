@@ -36,9 +36,10 @@
   .squadLabel .sqTag { font-size: 0.5em; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; opacity: 0.85; margin-top: 3px; color: var(--purple-blue); }
   .squadTrack { position: relative; flex: 1 1 auto; background: rgba(255,255,255,0.05); border-radius: 10px; overflow: hidden; }
   .trackInner { position: absolute; top: 0; left: 0; height: 100%; }
-  .block { position: absolute; top: 6px; bottom: 6px; border-radius: 9px; box-sizing: border-box; padding: 10px 14px; overflow: hidden; font-size: clamp(18px, 2.6vh, 30px); line-height: 1.25; box-shadow: 0 3px 8px rgba(0,0,0,0.4); }
+  .block { position: absolute; top: 6px; bottom: 6px; border-radius: 9px; box-sizing: border-box; padding: 10px 14px; overflow: hidden; font-size: clamp(21px, 3.1vh, 36px); line-height: 1.22; box-shadow: 0 3px 8px rgba(0,0,0,0.4); }
   .block .label { font-weight: 800; display: block; overflow-wrap: break-word; word-break: break-word; }
-  .block .loc { display: block; opacity: 0.9; font-size: 0.85em; font-weight: 700; margin-top: 2px; overflow-wrap: break-word; word-break: break-word; }
+  .block .loc { display: block; opacity: 0.9; font-size: 0.82em; font-weight: 700; margin-top: 2px; overflow-wrap: break-word; word-break: break-word; }
+  .block .time { display: block; opacity: 0.85; font-size: 0.68em; font-weight: 700; margin-top: 2px; white-space: normal; overflow-wrap: break-word; word-break: keep-all; }
   #nowLine { position: absolute; top: 0; bottom: 0; width: 4px; background: var(--yellow); box-shadow: 0 0 12px rgba(248,235,177,0.9); z-index: 5; display: none; pointer-events: none; }
   #nowLine::before { content: "NOW"; position: absolute; top: -4px; left: 8px; font-size: clamp(13px, 1.6vh, 18px); font-weight: 800; letter-spacing: 1px; color: var(--yellow); white-space: nowrap; }
   #emptyMsg, #errorMsg { margin: auto; text-align: center; opacity: 0.85; font-size: clamp(18px, 2.6vh, 30px); padding: 20px; color: var(--teal-light); }
@@ -252,6 +253,31 @@
     return { label: stripped || clean, location: "" };
   }
 
+  // Comp squads' cells often carry their own explicit time range as free text, e.g.
+  // "Warm Up Condish (Team Rod + Team Tumble Strip) 4:00 - 5:00". Those merged cells don't
+  // always line up neatly with the 15-minute ruler grid (coaches resize them by hand), so the
+  // column-position math in sessionsForSquadRow can be several minutes off. When a cell's text
+  // ends with an explicit "H:MM - H:MM" range, that's the authoritative time — this extracts it.
+  function parseEmbeddedRange(raw, isAMSection) {
+    var clean = raw.replace(/\s+/g, " ").trim();
+    var m = clean.match(/(\d{1,2}:\d{2})\s*(?:am|pm|AM|PM)?\s*[-–]\s*(\d{1,2}:\d{2})\s*(?:am|pm|AM|PM)?\s*$/);
+    if (!m) return null;
+    var startBase = parseTimeLabel(m[1]);
+    var endBase = parseTimeLabel(m[2]);
+    if (startBase === null || endBase === null) return null;
+    function toAbsolute(base, prevAbsolute) {
+      var hour = Math.floor(base / 60);
+      var offset = (!isAMSection && hour >= 1 && hour < 12) ? 12 * 60 : 0;
+      var val = base + offset;
+      if (prevAbsolute !== null && val < prevAbsolute) val += 12 * 60;
+      return val;
+    }
+    var startAbs = toAbsolute(startBase, null);
+    var endAbs = toAbsolute(endBase, startAbs);
+    if (endAbs <= startAbs) return null;
+    return { start: startAbs, end: endAbs };
+  }
+
   // Resolves a block's display color from its activity label: an exact code match (WU, VT,
   // UB, ...) wins, then a keyword match against the fuller Comp-squad descriptions, then
   // "Break" is forced black, and anything else falls back to whatever color the coach set
@@ -304,10 +330,10 @@
     var isAMSection = sectionLabel.indexOf("AM") !== -1;
     var ruler = buildRuler(rowData, rulerRowIdx, 2, maxCols, isAMSection);
     var rulerCols = Object.keys(ruler).map(Number).sort(function (a, b) { return a - b; });
-    return { squadStart: rulerRowIdx + 1, squadEnd: nextIndex, ruler: ruler, rulerCols: rulerCols, maxCols: maxCols };
+    return { squadStart: rulerRowIdx + 1, squadEnd: nextIndex, ruler: ruler, rulerCols: rulerCols, maxCols: maxCols, isAMSection: isAMSection };
   }
 
-  function sessionsForSquadRow(rowData, merges, rowIdx, ruler, rulerCols, maxCols) {
+  function sessionsForSquadRow(rowData, merges, rowIdx, ruler, rulerCols, maxCols, isAMSection) {
     var sessions = [];
     var row = rowData[rowIdx];
     var col = rulerCols.length ? rulerCols[0] : 2;
@@ -320,8 +346,11 @@
       var srcCell = rowData[srcRow] && rowData[srcRow].values ? rowData[srcRow].values[srcCol] : null;
       var text = cellText(srcCell);
       if (text) {
-        var startMin = ruler[col] !== undefined ? ruler[col] : null;
-        var endMin = ruler[endCol] !== undefined ? ruler[endCol] : (startMin !== null ? startMin + 15 * (endCol - col) : null);
+        // Prefer the cell's own explicit time range (Comp squads write one in) over the
+        // column/merge position, since merges don't always land cleanly on the 15-min grid.
+        var embedded = parseEmbeddedRange(text, isAMSection);
+        var startMin = embedded ? embedded.start : (ruler[col] !== undefined ? ruler[col] : null);
+        var endMin = embedded ? embedded.end : (ruler[endCol] !== undefined ? ruler[endCol] : (startMin !== null ? startMin + 15 * (endCol - col) : null));
         if (startMin !== null && endMin !== null && endMin > startMin) {
           var parsed = parseActivityText(text);
           var bg = (srcCell.effectiveFormat && srcCell.effectiveFormat.backgroundColor) ? colorToHex(srcCell.effectiveFormat.backgroundColor) : "#5a6b85";
@@ -390,9 +419,7 @@
   // while classes glide past like a ticker.
   var rollState = null;
 
-  function computeScrollX(state) {
-    var now = getNow();
-    var nowMin = nowMinutesPrecise(now);
+  function computeScrollX(state, nowMin) {
     var scrollX = (nowMin - state.baseT) * state.pxPerMin - state.viewportWidth * ROLL_NOW_FRACTION;
     var maxScroll = Math.max(state.totalWidth - state.viewportWidth, 0);
     if (scrollX < 0) scrollX = 0;
@@ -402,7 +429,13 @@
 
   function applyRollTransform(instant) {
     if (!rollState) return;
-    var scrollX = computeScrollX(rollState);
+    var nowMin = nowMinutesPrecise(getNow());
+    // The "NOW" marker only makes sense while the actual time is inside today's scheduled
+    // window — before the first class or after the last one, hide it instead of letting it
+    // sit on a class that isn't actually happening right now.
+    var inRange = nowMin >= rollState.baseT && nowMin <= rollState.maxT;
+    document.getElementById("nowLine").style.display = inRange ? "block" : "none";
+    var scrollX = computeScrollX(rollState, nowMin);
     var transform = "translateX(-" + scrollX.toFixed(1) + "px)";
     var els = [rollState.rulerInner].concat(rollState.trackInners);
     if (instant) {
@@ -496,6 +529,7 @@
         block.style.color = fg;
         var html = '<span class="label">' + s.label + "</span>";
         if (s.location) html += '<span class="loc">' + s.location + "</span>";
+        html += '<span class="time">' + formatMinutes(s.start) + " - " + formatMinutes(s.end) + "</span>";
         block.innerHTML = html;
         item.inner.appendChild(block);
       });
@@ -503,6 +537,7 @@
 
     rollState = {
       baseT: minT,
+      maxT: maxT,
       pxPerMin: pxPerMin,
       totalWidth: totalWidth,
       viewportWidth: viewportWidth,
@@ -511,12 +546,12 @@
     };
 
     // Position the fixed "now" marker line within gridArea, at the same spot the timeline
-    // scrolls toward.
+    // scrolls toward. Its visibility (only while "now" is actually within today's schedule)
+    // is handled by applyRollTransform, called right below.
     var gridRect = document.getElementById("gridArea").getBoundingClientRect();
     var trackRect = rowItems[0].track.getBoundingClientRect();
     var nowLeft = (trackRect.left - gridRect.left) + viewportWidth * ROLL_NOW_FRACTION;
     nowLineEl.style.left = nowLeft + "px";
-    nowLineEl.style.display = "block";
 
     applyRollTransform(true);
   }
@@ -543,7 +578,7 @@
         if (!name) continue;
         var cat = categorize(name);
         if (cat !== "Comp") continue; // this screen only ever shows Comp squads
-        var sessions = sessionsForSquadRow(sheet.rowData, sheet.merges, r, section.ruler, section.rulerCols, section.maxCols);
+        var sessions = sessionsForSquadRow(sheet.rowData, sheet.merges, r, section.ruler, section.rulerCols, section.maxCols, section.isAMSection);
         if (sessions.length) squads.push({ name: name, category: cat, sessions: sessions });
       }
       renderSchedule(squads);
