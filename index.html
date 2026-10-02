@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mokara Gymnastics — Live Schedule</title>
+<title>Mokara Gymnastics — Comp Schedule</title>
 <style>
   :root {
     --navy: #1B365D;
@@ -19,45 +19,39 @@
   #page { position: fixed; inset: 0; display: flex; flex-direction: column; background: var(--navy-deep); }
   #topBar { flex: 0 0 auto; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; column-gap: clamp(16px, 2.4vw, 40px); padding: clamp(14px, 2vh, 28px) clamp(20px, 2.4vw, 44px); background: var(--navy); box-shadow: 0 3px 14px rgba(0,0,0,0.35); border-bottom: 3px solid var(--yellow); }
   #brand { justify-self: start; font-weight: 800; letter-spacing: 2px; font-size: clamp(18px, 2.6vh, 28px); color: var(--cream); white-space: nowrap; }
+  #modeBadge { font-size: 0.55em; font-weight: 800; letter-spacing: 1.5px; color: var(--purple-light); background: rgba(190,202,234,0.16); padding: 3px 9px; border-radius: 5px; margin-left: 10px; vertical-align: middle; }
   #headerCenter { justify-self: center; display: flex; align-items: baseline; gap: clamp(14px, 2vw, 30px); }
   #dayLabel { font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; font-size: clamp(28px, 4.4vh, 46px); color: var(--teal-bright); white-space: nowrap; }
   #clockTime { font-weight: 800; letter-spacing: 1px; font-variant-numeric: tabular-nums; font-size: clamp(28px, 4.4vh, 46px); color: var(--cream); white-space: nowrap; }
   #weekLabel { justify-self: end; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; font-size: clamp(18px, 2.6vh, 28px); color: var(--cream); white-space: nowrap; }
   #body { flex: 1 1 auto; display: flex; min-height: 0; }
-  #gridArea { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; padding: clamp(12px, 1.8vh, 26px) clamp(16px, 2vw, 34px); overflow: hidden; }
-  #ruler { display: flex; flex: 0 0 auto; height: clamp(26px, 3.2vh, 42px); margin-left: var(--label-width, 180px); position: relative; border-bottom: 2px solid rgba(255,255,255,0.18); margin-bottom: 6px; }
-  .rulerTick { position: absolute; top: 0; bottom: 0; display: flex; align-items: flex-end; font-size: clamp(11px, 1.4vh, 16px); color: var(--teal-light); opacity: 0.8; border-left: 1px solid rgba(255,255,255,0.14); padding-left: 5px; font-weight: 600; }
+  #gridArea { flex: 1 1 auto; min-width: 0; position: relative; display: flex; flex-direction: column; padding: clamp(12px, 1.8vh, 26px) clamp(16px, 2vw, 34px); overflow: hidden; }
+  #ruler { display: flex; flex: 0 0 auto; height: clamp(32px, 4vh, 52px); margin-left: var(--label-width, 220px); position: relative; overflow: hidden; border-bottom: 2px solid rgba(255,255,255,0.18); margin-bottom: 10px; }
+  #rulerInner { position: absolute; top: 0; left: 0; height: 100%; }
+  .rulerTick { position: absolute; top: 0; bottom: 0; display: flex; align-items: flex-end; font-size: clamp(14px, 1.9vh, 22px); color: var(--teal-light); opacity: 0.8; border-left: 1px solid rgba(255,255,255,0.14); padding-left: 6px; font-weight: 600; white-space: nowrap; }
   .rulerTick.major { color: var(--cream); opacity: 1; font-weight: 800; border-left-color: rgba(255,255,255,0.35); }
-  #rows { flex: 1 1 auto; display: flex; flex-direction: column; gap: clamp(6px, 1vh, 12px); overflow-y: auto; min-height: 0; }
+  #rows { flex: 1 1 auto; display: flex; flex-direction: column; gap: clamp(10px, 1.6vh, 20px); overflow-y: auto; min-height: 0; }
   .squadRow { flex: 1 1 0; display: flex; align-items: stretch; min-height: 0; }
-  .squadLabel { flex: 0 0 var(--label-width, 180px); width: var(--label-width, 180px); display: flex; flex-direction: column; align-items: flex-start; justify-content: center; font-weight: 800; font-size: clamp(14px, 1.9vh, 22px); padding-right: 12px; color: var(--teal-bright); }
-  .squadLabel .sqTag { font-size: 0.56em; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; opacity: 0.85; margin-top: 2px; }
-  .squadLabel.cat-comp { color: var(--purple-light); }
-  .squadLabel.cat-comp .sqTag { color: var(--purple-blue); }
-  .squadLabel.cat-rec { color: var(--yellow); }
-  .squadLabel.cat-rec .sqTag { color: var(--yellow); }
-  .groupDivider { flex: 0 0 auto; height: 1px; background: rgba(255,255,255,0.12); margin: 2px 0 2px var(--label-width, 180px); }
-  .squadTrack { position: relative; flex: 1 1 auto; background: rgba(255,255,255,0.05); border-radius: 8px; }
-  /* overflow: visible (not hidden) on purpose — a short session (e.g. a 5-10 min "Flex" or
-     "Break") is often too narrow for even one word at this font size. Multi-word text still
-     wraps normally at word boundaries (so a wide block with a long location still wraps
-     cleanly across 2 lines), but a single word that doesn't fit is no longer forced to break
-     letter-by-letter (unreadable, and taller than the block) — it just overflows past the
-     block's own colored edge as one intact word. The z-index bump keeps that spilled text
-     readable on top of whatever neighboring block it crosses over. */
-  .block { position: absolute; top: 4px; bottom: 4px; border-radius: 7px; box-sizing: border-box; padding: 6px 9px; overflow: visible; font-size: clamp(12px, 1.7vh, 18px); line-height: 1.25; box-shadow: 0 2px 5px rgba(0,0,0,0.4); }
-  .block .label { font-weight: 800; display: block; position: relative; z-index: 2; }
-  .block .loc { display: block; opacity: 0.9; font-size: 0.85em; font-weight: 700; margin-top: 1px; position: relative; z-index: 2; }
-  #emptyMsg, #errorMsg { margin: auto; text-align: center; opacity: 0.85; font-size: clamp(16px, 2.2vh, 26px); padding: 20px; color: var(--teal-light); }
-  #legend { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: clamp(10px, 1.4vw, 24px); align-items: center; padding: clamp(8px, 1.2vh, 16px) clamp(20px, 2.4vw, 44px); background: var(--navy-deep); font-size: clamp(11px, 1.3vh, 15px); border-top: 1px solid rgba(255,255,255,0.1); }
-  .legendItem { display: flex; align-items: center; gap: 8px; opacity: 0.95; color: var(--teal-light); }
-  .legendSwatch { display: inline-flex; align-items: center; justify-content: center; padding: 3px 9px; border-radius: 6px; font-weight: 800; letter-spacing: 0.5px; }
+  .squadLabel { flex: 0 0 var(--label-width, 220px); width: var(--label-width, 220px); display: flex; flex-direction: column; align-items: flex-start; justify-content: center; font-weight: 800; font-size: clamp(20px, 2.8vh, 34px); padding-right: 14px; color: var(--purple-light); }
+  .squadLabel .sqTag { font-size: 0.5em; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; opacity: 0.85; margin-top: 3px; color: var(--purple-blue); }
+  .squadTrack { position: relative; flex: 1 1 auto; background: rgba(255,255,255,0.05); border-radius: 10px; overflow: hidden; }
+  .trackInner { position: absolute; top: 0; left: 0; height: 100%; }
+  .block { position: absolute; top: 6px; bottom: 6px; border-radius: 9px; box-sizing: border-box; padding: 14px 18px; overflow: hidden; font-size: clamp(28px, 4.6vh, 54px); line-height: 1.2; box-shadow: 0 3px 8px rgba(0,0,0,0.4); }
+  .block .label { font-weight: 800; display: block; overflow-wrap: break-word; word-break: break-word; }
+  .block .loc { display: block; opacity: 0.9; font-size: 0.78em; font-weight: 700; margin-top: 4px; overflow-wrap: break-word; word-break: break-word; }
+  .block .time { display: block; opacity: 0.85; font-size: 0.62em; font-weight: 700; margin-top: 4px; white-space: normal; overflow-wrap: break-word; word-break: keep-all; }
+  #nowLine { position: absolute; top: 0; bottom: 0; width: 4px; background: var(--yellow); box-shadow: 0 0 12px rgba(248,235,177,0.9); z-index: 5; display: none; pointer-events: none; transition: left 1s linear; }
+  #nowLine::before { content: "NOW"; position: absolute; top: -4px; left: 8px; font-size: clamp(13px, 1.6vh, 18px); font-weight: 800; letter-spacing: 1px; color: var(--yellow); white-space: nowrap; }
+  #emptyMsg, #errorMsg { margin: auto; text-align: center; opacity: 0.85; font-size: clamp(18px, 2.6vh, 30px); padding: 20px; color: var(--teal-light); }
+  #legend { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: clamp(12px, 1.6vw, 28px); align-items: center; padding: clamp(10px, 1.5vh, 20px) clamp(20px, 2.4vw, 44px); background: var(--navy-deep); font-size: clamp(14px, 1.7vh, 19px); border-top: 1px solid rgba(255,255,255,0.1); }
+  .legendItem { display: flex; align-items: center; gap: 9px; opacity: 0.95; color: var(--teal-light); }
+  .legendSwatch { display: inline-flex; align-items: center; justify-content: center; padding: 4px 11px; border-radius: 7px; font-weight: 800; letter-spacing: 0.5px; }
 </style>
 </head>
 <body>
 <div id="page">
   <div id="topBar">
-    <div id="brand">MOKARA GYMNASTICS</div>
+    <div id="brand">MOKARA GYMNASTICS<span id="modeBadge">COMP</span></div>
     <div id="headerCenter">
       <div id="dayLabel">-</div>
       <div id="clockTime">--:--</div>
@@ -68,6 +62,7 @@
     <div id="gridArea">
       <div id="ruler"></div>
       <div id="rows"></div>
+      <div id="nowLine"></div>
     </div>
   </div>
   <div id="legend"></div>
@@ -81,7 +76,8 @@
   var WEEK1_ANCHOR = "2026-09-07"; // Monday — Week 1 of the 5-week pattern
   var ROTATION_LENGTH = 5;
   var WEEK_TAB_MAP = { 1: "Week 1 and 4", 2: "Week 2", 3: "Week 3 and 5", 4: "Week 1 and 4", 5: "Week 3 and 5" };
-  // Squads NOT in this list are treated as Rec (named/individual squads). Update here if the coaches add new Comp squads.
+  // Squads NOT in this list are treated as Rec (named/individual squads). This screen only
+  // ever shows squads in this list. Update here if the coaches add new Comp squads.
   var COMP_SQUADS = ["16s 20s 23s", "12s", "Pre-Devo", "Pre-Devo = Devo 2", "23/20s", "16s"];
   var WEEKEND_CUTOFF_MIN = 13 * 60 + 30; // 1:30pm — splits Saturday/Sunday into AM/PM sections
   var DAY_LABEL_RE = /^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday AM|Saturday PM|Sunday AM|Sunday PM)$/;
@@ -98,6 +94,11 @@
   };
   var BREAK_COLOR = "#000000";
 
+  // ---- Rolling-timeline configuration (this screen scrolls continuously as time passes) ----
+  var ROLL_VISIBLE_MINUTES = 90; // how many minutes of schedule are visible on screen at once
+  var ROLL_NOW_FRACTION = 0.14;  // where "now" sits across the visible width (0 = left edge)
+  var ROLL_UPDATE_MS = 1000;     // how often we nudge the scroll position; CSS tweens smoothly between ticks
+
   function getNow() {
     var params = new URLSearchParams(window.location.search);
     var override = params.get("debug_now");
@@ -112,6 +113,17 @@
     var parts = {};
     fmt.formatToParts(date).forEach(function (p) { parts[p.type] = p.value; });
     return parts;
+  }
+
+  // Same as getPartsInTZ but with second-level precision, used only for the smooth scroll math.
+  function nowMinutesPrecise(date) {
+    var fmt = new Intl.DateTimeFormat("en-GB", {
+      timeZone: TIMEZONE, hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false
+    });
+    var parts = {};
+    fmt.formatToParts(date).forEach(function (p) { parts[p.type] = p.value; });
+    var h = parseInt(parts.hour, 10), m = parseInt(parts.minute, 10), s = parseInt(parts.second, 10);
+    return h * 60 + m + s / 60;
   }
 
   function dateOnlyUTC(y, m, d) { return Date.UTC(y, m - 1, d); }
@@ -366,6 +378,7 @@
 
   function showError(msg) {
     document.getElementById("rows").innerHTML = '<div id="errorMsg">' + msg + "</div>";
+    document.getElementById("nowLine").style.display = "none";
   }
 
   var legendCache = null;
@@ -399,14 +412,67 @@
     });
   }
 
+  // ---- Rolling timeline state & helpers ----
+  // Unlike the combined-squads screen (which lays out the whole day as a static percentage
+  // width), this Comp-only screen keeps a constant pixels-per-minute scale and continuously
+  // scrolls the timeline left as real time passes, so "now" stays roughly fixed on screen
+  // while classes glide past like a ticker.
+  var rollState = null;
+
+  function computeScrollX(state, nowMin) {
+    var scrollX = (nowMin - state.baseT) * state.pxPerMin - state.viewportWidth * ROLL_NOW_FRACTION;
+    var maxScroll = Math.max(state.totalWidth - state.viewportWidth, 0);
+    if (scrollX < 0) scrollX = 0;
+    if (scrollX > maxScroll) scrollX = maxScroll;
+    return scrollX;
+  }
+
+  function applyRollTransform(instant) {
+    if (!rollState) return;
+    var nowLineEl = document.getElementById("nowLine");
+    var nowMin = nowMinutesPrecise(getNow());
+    // The "NOW" marker only makes sense while the actual time is inside today's scheduled
+    // window — before the first class or after the last one, hide it instead of letting it
+    // sit on a class that isn't actually happening right now.
+    var inRange = nowMin >= rollState.baseT && nowMin <= rollState.maxT;
+    nowLineEl.style.display = inRange ? "block" : "none";
+    var scrollX = computeScrollX(rollState, nowMin);
+    var transform = "translateX(-" + scrollX.toFixed(1) + "px)";
+    var els = [rollState.rulerInner].concat(rollState.trackInners);
+    if (instant) {
+      els.forEach(function (el) { el.style.transition = "none"; el.style.transform = transform; });
+      nowLineEl.style.transition = "none";
+      void rollState.rulerInner.offsetHeight; // force reflow so the "none" transition takes effect
+      requestAnimationFrame(function () {
+        els.forEach(function (el) { el.style.transition = "transform " + (ROLL_UPDATE_MS / 1000) + "s linear"; });
+        nowLineEl.style.transition = "left " + (ROLL_UPDATE_MS / 1000) + "s linear";
+      });
+    } else {
+      els.forEach(function (el) { el.style.transform = transform; });
+    }
+    // The marker's on-screen position is recomputed from the real clock every tick, rather
+    // than held at a fixed resting spot, so it tracks "now" exactly even during the first/
+    // last ~12 minutes of the day when the timeline is pinned at its start/end and the
+    // scroll above can't move to compensate.
+    if (inRange) {
+      var nowPxInTimeline = (nowMin - rollState.baseT) * rollState.pxPerMin - scrollX;
+      if (nowPxInTimeline < 0) nowPxInTimeline = 0;
+      if (nowPxInTimeline > rollState.viewportWidth) nowPxInTimeline = rollState.viewportWidth;
+      nowLineEl.style.left = (rollState.trackOffsetX + nowPxInTimeline) + "px";
+    }
+  }
+
   function renderSchedule(squads) {
     var rowsEl = document.getElementById("rows");
     var rulerEl = document.getElementById("ruler");
+    var nowLineEl = document.getElementById("nowLine");
     rowsEl.innerHTML = "";
     rulerEl.innerHTML = "";
+    rollState = null;
 
     if (!squads.length) {
-      rowsEl.innerHTML = '<div id="emptyMsg">No classes scheduled right now.</div>';
+      rowsEl.innerHTML = '<div id="emptyMsg">No Comp classes scheduled right now.</div>';
+      nowLineEl.style.display = "none";
       return;
     }
 
@@ -415,60 +481,91 @@
       sq.sessions.forEach(function (s) { allStarts.push(s.start); allEnds.push(s.end); });
     });
     if (!allStarts.length) {
-      rowsEl.innerHTML = '<div id="emptyMsg">No classes scheduled right now.</div>';
+      rowsEl.innerHTML = '<div id="emptyMsg">No Comp classes scheduled right now.</div>';
+      nowLineEl.style.display = "none";
       return;
     }
     var minT = Math.min.apply(null, allStarts);
     var maxT = Math.max.apply(null, allEnds);
     var span = Math.max(maxT - minT, 1);
 
-    // Ruler ticks every 30 min, bold on the hour
-    for (var t = Math.ceil(minT / 15) * 15; t <= maxT; t += 15) {
-      var pct = ((t - minT) / span) * 100;
-      var tick = document.createElement("div");
-      var isHour = (t % 60) === 0;
-      tick.className = "rulerTick" + (isHour ? " major" : "");
-      tick.style.left = pct + "%";
-      tick.textContent = formatMinutes(t).replace(" ", "");
-      rulerEl.appendChild(tick);
-    }
-
-    var lastCategory = null;
+    // Build each squad row (the "viewport") first so we can measure its real pixel width.
+    var rowItems = [];
     squads.forEach(function (sq) {
-      if (lastCategory !== null && sq.category !== lastCategory) {
-        var divider = document.createElement("div");
-        divider.className = "groupDivider";
-        rowsEl.appendChild(divider);
-      }
-      lastCategory = sq.category;
-
       var rowEl = document.createElement("div");
       rowEl.className = "squadRow";
       var label = document.createElement("div");
-      label.className = "squadLabel " + (sq.category === "Comp" ? "cat-comp" : "cat-rec");
+      label.className = "squadLabel";
       label.innerHTML = '<span class="sqName">' + sq.name + '</span><span class="sqTag">' + sq.category + '</span>';
       var track = document.createElement("div");
       track.className = "squadTrack";
-      sq.sessions.forEach(function (s) {
-        var left = ((s.start - minT) / span) * 100;
-        var width = ((s.end - s.start) / span) * 100;
+      var inner = document.createElement("div");
+      inner.className = "trackInner";
+      track.appendChild(inner);
+      rowEl.appendChild(label);
+      rowEl.appendChild(track);
+      rowsEl.appendChild(rowEl);
+      rowItems.push({ sq: sq, track: track, inner: inner });
+    });
+
+    var viewportWidth = rowItems[0].track.clientWidth || 800;
+    var pxPerMin = viewportWidth / ROLL_VISIBLE_MINUTES;
+    var totalWidth = span * pxPerMin;
+
+    // Ruler, built in the same pixel coordinate space as the blocks.
+    var rulerInner = document.createElement("div");
+    rulerInner.id = "rulerInner";
+    rulerInner.style.width = totalWidth + "px";
+    for (var t = Math.ceil(minT / 15) * 15; t <= maxT; t += 15) {
+      var leftPx = (t - minT) * pxPerMin;
+      var tick = document.createElement("div");
+      var isHour = (t % 60) === 0;
+      tick.className = "rulerTick" + (isHour ? " major" : "");
+      tick.style.left = leftPx + "px";
+      tick.textContent = formatMinutes(t).replace(" ", "");
+      rulerInner.appendChild(tick);
+    }
+    rulerEl.appendChild(rulerInner);
+
+    rowItems.forEach(function (item) {
+      item.inner.style.width = totalWidth + "px";
+      item.sq.sessions.forEach(function (s) {
+        var leftPx = (s.start - minT) * pxPerMin;
+        var widthPx = Math.max((s.end - s.start) * pxPerMin, 12);
         var block = document.createElement("div");
         block.className = "block";
-        block.style.left = left + "%";
-        block.style.width = Math.max(width, 1) + "%";
+        block.style.left = leftPx + "px";
+        block.style.width = widthPx + "px";
         var resolvedBg = resolveBlockColor(s.label, s.bg);
         block.style.background = resolvedBg;
         var fg = blockTextColor(resolvedBg);
         block.style.color = fg;
         var html = '<span class="label">' + s.label + "</span>";
         if (s.location) html += '<span class="loc">' + s.location + "</span>";
+        html += '<span class="time">' + formatMinutes(s.start) + " - " + formatMinutes(s.end) + "</span>";
         block.innerHTML = html;
-        track.appendChild(block);
+        item.inner.appendChild(block);
       });
-      rowEl.appendChild(label);
-      rowEl.appendChild(track);
-      rowsEl.appendChild(rowEl);
     });
+
+    // "now" marker position (left) and visibility are both recomputed every tick in
+    // applyRollTransform, so they always reflect the real clock — trackOffsetX just accounts
+    // for the squad-label column so the marker lines up with the scrolling track beside it.
+    var gridRect = document.getElementById("gridArea").getBoundingClientRect();
+    var trackRect = rowItems[0].track.getBoundingClientRect();
+
+    rollState = {
+      baseT: minT,
+      maxT: maxT,
+      pxPerMin: pxPerMin,
+      totalWidth: totalWidth,
+      viewportWidth: viewportWidth,
+      trackOffsetX: trackRect.left - gridRect.left,
+      rulerInner: rulerInner,
+      trackInners: rowItems.map(function (x) { return x.inner; })
+    };
+
+    applyRollTransform(true);
   }
 
   function loadAndRender() {
@@ -491,14 +588,11 @@
         if (!row || !row.values) continue;
         var name = cellText(row.values[0]);
         if (!name) continue;
+        var cat = categorize(name);
+        if (cat !== "Comp") continue; // this screen only ever shows Comp squads
         var sessions = sessionsForSquadRow(sheet.rowData, sheet.merges, r, section.ruler, section.rulerCols, section.maxCols, section.isAMSection);
-        if (sessions.length) squads.push({ name: name, category: categorize(name), sessions: sessions });
+        if (sessions.length) squads.push({ name: name, category: cat, sessions: sessions });
       }
-      // Comp squads first, then Rec squads, preserving sheet order within each group.
-      squads.sort(function (a, b) {
-        if (a.category === b.category) return 0;
-        return a.category === "Comp" ? -1 : 1;
-      });
       renderSchedule(squads);
     }).catch(function (err) {
       console.error(err);
@@ -513,8 +607,15 @@
     setTimeout(function () { window.location.reload(); }, next.getTime() - now.getTime());
   })();
 
+  var resizeTimer = null;
+  window.addEventListener("resize", function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(loadAndRender, 300);
+  });
+
   tickClock();
   setInterval(tickClock, 1000);
+  setInterval(function () { applyRollTransform(false); }, ROLL_UPDATE_MS);
   loadAndRender();
   setInterval(loadAndRender, REFRESH_MS);
 </script>
