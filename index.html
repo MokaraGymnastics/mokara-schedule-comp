@@ -40,7 +40,7 @@
   .block .label { font-weight: 800; display: block; overflow-wrap: break-word; word-break: break-word; }
   .block .loc { display: block; opacity: 0.9; font-size: 0.78em; font-weight: 700; margin-top: 4px; overflow-wrap: break-word; word-break: break-word; }
   .block .time { display: block; opacity: 0.85; font-size: 0.62em; font-weight: 700; margin-top: 4px; white-space: normal; overflow-wrap: break-word; word-break: keep-all; }
-  #nowLine { position: absolute; top: 0; bottom: 0; width: 4px; background: var(--yellow); box-shadow: 0 0 12px rgba(248,235,177,0.9); z-index: 5; display: none; pointer-events: none; }
+  #nowLine { position: absolute; top: 0; bottom: 0; width: 4px; background: var(--yellow); box-shadow: 0 0 12px rgba(248,235,177,0.9); z-index: 5; display: none; pointer-events: none; transition: left 1s linear; }
   #nowLine::before { content: "NOW"; position: absolute; top: -4px; left: 8px; font-size: clamp(13px, 1.6vh, 18px); font-weight: 800; letter-spacing: 1px; color: var(--yellow); white-space: nowrap; }
   #emptyMsg, #errorMsg { margin: auto; text-align: center; opacity: 0.85; font-size: clamp(18px, 2.6vh, 30px); padding: 20px; color: var(--teal-light); }
   #legend { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: clamp(12px, 1.6vw, 28px); align-items: center; padding: clamp(10px, 1.5vh, 20px) clamp(20px, 2.4vw, 44px); background: var(--navy-deep); font-size: clamp(14px, 1.7vh, 19px); border-top: 1px solid rgba(255,255,255,0.1); }
@@ -429,23 +429,36 @@
 
   function applyRollTransform(instant) {
     if (!rollState) return;
+    var nowLineEl = document.getElementById("nowLine");
     var nowMin = nowMinutesPrecise(getNow());
     // The "NOW" marker only makes sense while the actual time is inside today's scheduled
     // window — before the first class or after the last one, hide it instead of letting it
     // sit on a class that isn't actually happening right now.
     var inRange = nowMin >= rollState.baseT && nowMin <= rollState.maxT;
-    document.getElementById("nowLine").style.display = inRange ? "block" : "none";
+    nowLineEl.style.display = inRange ? "block" : "none";
     var scrollX = computeScrollX(rollState, nowMin);
     var transform = "translateX(-" + scrollX.toFixed(1) + "px)";
     var els = [rollState.rulerInner].concat(rollState.trackInners);
     if (instant) {
       els.forEach(function (el) { el.style.transition = "none"; el.style.transform = transform; });
+      nowLineEl.style.transition = "none";
       void rollState.rulerInner.offsetHeight; // force reflow so the "none" transition takes effect
       requestAnimationFrame(function () {
         els.forEach(function (el) { el.style.transition = "transform " + (ROLL_UPDATE_MS / 1000) + "s linear"; });
+        nowLineEl.style.transition = "left " + (ROLL_UPDATE_MS / 1000) + "s linear";
       });
     } else {
       els.forEach(function (el) { el.style.transform = transform; });
+    }
+    // The marker's on-screen position is recomputed from the real clock every tick, rather
+    // than held at a fixed resting spot, so it tracks "now" exactly even during the first/
+    // last ~12 minutes of the day when the timeline is pinned at its start/end and the
+    // scroll above can't move to compensate.
+    if (inRange) {
+      var nowPxInTimeline = (nowMin - rollState.baseT) * rollState.pxPerMin - scrollX;
+      if (nowPxInTimeline < 0) nowPxInTimeline = 0;
+      if (nowPxInTimeline > rollState.viewportWidth) nowPxInTimeline = rollState.viewportWidth;
+      nowLineEl.style.left = (rollState.trackOffsetX + nowPxInTimeline) + "px";
     }
   }
 
@@ -535,23 +548,22 @@
       });
     });
 
+    // "now" marker position (left) and visibility are both recomputed every tick in
+    // applyRollTransform, so they always reflect the real clock — trackOffsetX just accounts
+    // for the squad-label column so the marker lines up with the scrolling track beside it.
+    var gridRect = document.getElementById("gridArea").getBoundingClientRect();
+    var trackRect = rowItems[0].track.getBoundingClientRect();
+
     rollState = {
       baseT: minT,
       maxT: maxT,
       pxPerMin: pxPerMin,
       totalWidth: totalWidth,
       viewportWidth: viewportWidth,
+      trackOffsetX: trackRect.left - gridRect.left,
       rulerInner: rulerInner,
       trackInners: rowItems.map(function (x) { return x.inner; })
     };
-
-    // Position the fixed "now" marker line within gridArea, at the same spot the timeline
-    // scrolls toward. Its visibility (only while "now" is actually within today's schedule)
-    // is handled by applyRollTransform, called right below.
-    var gridRect = document.getElementById("gridArea").getBoundingClientRect();
-    var trackRect = rowItems[0].track.getBoundingClientRect();
-    var nowLeft = (trackRect.left - gridRect.left) + viewportWidth * ROLL_NOW_FRACTION;
-    nowLineEl.style.left = nowLeft + "px";
 
     applyRollTransform(true);
   }
