@@ -82,7 +82,7 @@
   // paused the rotation) without changing the formula for every other week. Each entry is a
   // single real-world confirmation from the coaches, not a guess.
   var WEEK_OVERRIDES = {
-    "2026-10-05": { tabName: "A - WK 1-4-7", weekNumber: 4 } // Deepa confirmed Oct 5 week runs the "Week 4" schedule, not the computed Week 5 — 2026-10-05
+    "2026-10-05": { tabName: "C - WK 3-6-9", weekNumber: 3 } // Deepa corrected Oct 5 week to "Week 3" (was first told Week 4 earlier the same day) — 2026-10-05
   };
   // Squads NOT in this list are treated as Rec (named/individual squads). This screen only
   // ever shows squads in this list. Update here if the coaches add new Comp squads.
@@ -282,7 +282,7 @@
   // with extra spacing used to visually separate them. This finds every time range in the
   // text (not just a trailing one) and splits the cell into one segment per range, using
   // whatever text sits between consecutive ranges as that segment's own label.
-  function parseEmbeddedSegments(raw, isAMSection) {
+  function parseEmbeddedSegments(raw, isAMSection, anchorMin) {
     var clean = raw.replace(/\s+/g, " ").trim();
     var re = /(\d{1,2}:\d{2})\s*(?:am|pm|AM|PM)?\s*[-–]\s*(\d{1,2}:\d{2})\s*(?:am|pm|AM|PM)?/g;
     var matches = [];
@@ -309,6 +309,19 @@
       var endBase = parseTimeLabel(mt.endStr);
       if (startBase === null || endBase === null) continue;
       var startAbs = toAbsolute(startBase, prevAbsolute);
+      // For the FIRST time range found in this cell, there's nothing within the cell's own text
+      // to resolve an ambiguous bare hour against, so anchor against the cell's own column
+      // position on the time ruler (passed in by the caller) instead of guessing AM/PM purely
+      // from the hour. This is what correctly reads a weekend "AM" section cell like
+      // "Break 1:00 - 1:30" sitting in a column that's actually well past noon (that section
+      // legitimately runs past noon — see WEEKEND_CUTOFF_MIN) as 1:00 PM rather than 1:00 AM.
+      // Anchoring to this cell's OWN ruler position (rather than, say, the previous cell's parsed
+      // end time) keeps this self-correcting per cell — a neighboring cell with a bad/mistyped
+      // time can't cascade a wrong 12-hour shift into this one.
+      if (prevAbsolute === null && typeof anchorMin === "number") {
+        var altStart = startAbs + 12 * 60;
+        if (Math.abs(altStart - anchorMin) < Math.abs(startAbs - anchorMin)) startAbs = altStart;
+      }
       var endAbs = toAbsolute(endBase, startAbs);
       if (endAbs <= startAbs) continue;
       var labelText = clean.slice(cursorText, mt.index).trim();
@@ -390,8 +403,10 @@
         // Prefer the cell's own explicit time range(s) (Comp squads write these in) over the
         // column/merge position, since merges don't always land cleanly on the 15-min grid.
         // A cell can embed more than one — each becomes its own session, positioned by its
-        // own true time rather than by the single merge's column span.
-        var segments = parseEmbeddedSegments(text, isAMSection);
+        // own true time rather than by the single merge's column span. ruler[col] is passed in
+        // as an anchor to resolve AM/PM ambiguity on the first range found (see the comment in
+        // parseEmbeddedSegments).
+        var segments = parseEmbeddedSegments(text, isAMSection, ruler[col]);
         var bg = (srcCell.effectiveFormat && srcCell.effectiveFormat.backgroundColor) ? colorToHex(srcCell.effectiveFormat.backgroundColor) : "#5a6b85";
         if (segments) {
           var prevParsed = null;
