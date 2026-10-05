@@ -257,14 +257,23 @@
   // "Warm Up Condish (Team Rod + Team Tumble Strip) 4:00 - 5:00". Those merged cells don't
   // always line up neatly with the 15-minute ruler grid (coaches resize them by hand), so the
   // column-position math in sessionsForSquadRow can be several minutes off. When a cell's text
-  // ends with an explicit "H:MM - H:MM" range, that's the authoritative time — this extracts it.
-  function parseEmbeddedRange(raw, isAMSection) {
+  // contains an explicit "H:MM - H:MM" range, that's the authoritative time — this extracts it.
+  //
+  // A cell can also pack more than one activity into a single merge, e.g.
+  // "Bars (Rec Bars) 5:20-5:40          Fun 5:40 - 5:45" — two sessions typed into one cell
+  // with extra spacing used to visually separate them. This finds every time range in the
+  // text (not just a trailing one) and splits the cell into one segment per range, using
+  // whatever text sits between consecutive ranges as that segment's own label.
+  function parseEmbeddedSegments(raw, isAMSection) {
     var clean = raw.replace(/\s+/g, " ").trim();
-    var m = clean.match(/(\d{1,2}:\d{2})\s*(?:am|pm|AM|PM)?\s*[-–]\s*(\d{1,2}:\d{2})\s*(?:am|pm|AM|PM)?\s*$/);
-    if (!m) return null;
-    var startBase = parseTimeLabel(m[1]);
-    var endBase = parseTimeLabel(m[2]);
-    if (startBase === null || endBase === null) return null;
+    var re = /(\d{1,2}:\d{2})\s*(?:am|pm|AM|PM)?\s*[-–]\s*(\d{1,2}:\d{2})\s*(?:am|pm|AM|PM)?/g;
+    var matches = [];
+    var m;
+    while ((m = re.exec(clean)) !== null) {
+      matches.push({ startStr: m[1], endStr: m[2], index: m.index, length: m[0].length });
+    }
+    if (!matches.length) return null;
+
     function toAbsolute(base, prevAbsolute) {
       var hour = Math.floor(base / 60);
       var offset = (!isAMSection && hour >= 1 && hour < 12) ? 12 * 60 : 0;
@@ -272,10 +281,24 @@
       if (prevAbsolute !== null && val < prevAbsolute) val += 12 * 60;
       return val;
     }
-    var startAbs = toAbsolute(startBase, null);
-    var endAbs = toAbsolute(endBase, startAbs);
-    if (endAbs <= startAbs) return null;
-    return { start: startAbs, end: endAbs };
+
+    var segments = [];
+    var cursorText = 0;
+    var prevAbsolute = null;
+    for (var i = 0; i < matches.length; i++) {
+      var mt = matches[i];
+      var startBase = parseTimeLabel(mt.startStr);
+      var endBase = parseTimeLabel(mt.endStr);
+      if (startBase === null || endBase === null) continue;
+      var startAbs = toAbsolute(startBase, prevAbsolute);
+      var endAbs = toAbsolute(endBase, startAbs);
+      if (endAbs <= startAbs) continue;
+      var labelText = clean.slice(cursorText, mt.index).trim();
+      segments.push({ text: labelText, start: startAbs, end: endAbs });
+      cursorText = mt.index + mt.length;
+      prevAbsolute = endAbs;
+    }
+    return segments.length ? segments : null;
   }
 
   // Resolves a block's display color from its activity label: an exact code match (WU, VT,
@@ -346,15 +369,24 @@
       var srcCell = rowData[srcRow] && rowData[srcRow].values ? rowData[srcRow].values[srcCol] : null;
       var text = cellText(srcCell);
       if (text) {
-        // Prefer the cell's own explicit time range (Comp squads write one in) over the
+        // Prefer the cell's own explicit time range(s) (Comp squads write these in) over the
         // column/merge position, since merges don't always land cleanly on the 15-min grid.
-        var embedded = parseEmbeddedRange(text, isAMSection);
-        var startMin = embedded ? embedded.start : (ruler[col] !== undefined ? ruler[col] : null);
-        var endMin = embedded ? embedded.end : (ruler[endCol] !== undefined ? ruler[endCol] : (startMin !== null ? startMin + 15 * (endCol - col) : null));
-        if (startMin !== null && endMin !== null && endMin > startMin) {
-          var parsed = parseActivityText(text);
-          var bg = (srcCell.effectiveFormat && srcCell.effectiveFormat.backgroundColor) ? colorToHex(srcCell.effectiveFormat.backgroundColor) : "#5a6b85";
-          sessions.push({ label: parsed.label, location: parsed.location, start: startMin, end: endMin, bg: bg });
+        // A cell can embed more than one — each becomes its own session, positioned by its
+        // own true time rather than by the single merge's column span.
+        var segments = parseEmbeddedSegments(text, isAMSection);
+        var bg = (srcCell.effectiveFormat && srcCell.effectiveFormat.backgroundColor) ? colorToHex(srcCell.effectiveFormat.backgroundColor) : "#5a6b85";
+        if (segments) {
+          segments.forEach(function (seg) {
+            var parsed = parseActivityText(seg.text);
+            sessions.push({ label: parsed.label, location: parsed.location, start: seg.start, end: seg.end, bg: bg });
+          });
+        } else {
+          var startMin = ruler[col] !== undefined ? ruler[col] : null;
+          var endMin = ruler[endCol] !== undefined ? ruler[endCol] : (startMin !== null ? startMin + 15 * (endCol - col) : null);
+          if (startMin !== null && endMin !== null && endMin > startMin) {
+            var parsed2 = parseActivityText(text);
+            sessions.push({ label: parsed2.label, location: parsed2.location, start: startMin, end: endMin, bg: bg });
+          }
         }
       }
       col = endCol;
@@ -607,6 +639,24 @@
     setTimeout(function () { window.location.reload(); }, next.getTime() - now.getTime());
   })();
 
+  // A TV screen that's been left open for hours only re-fetches the SHEET data on each
+  // REFRESH_MS tick — it keeps running whatever version of this page's own code was loaded
+  // when the tab was opened, until the once-a-day midnight reload above. That means a fix
+  // pushed mid-afternoon wouldn't actually reach an already-open screen until that night at
+  // the earliest. To close that gap, also re-fetch this page's own HTML on the same cadence;
+  // if it's changed since we loaded (i.e. a new version has been published), reload right
+  // away so a deploy reaches the screen within minutes instead of hours.
+  var selfCheckBaseline = null;
+  function checkForPageUpdate() {
+    fetch(location.pathname + "?selfcheck=" + Date.now(), { cache: "no-store" })
+      .then(function (r) { return r.text(); })
+      .then(function (text) {
+        if (selfCheckBaseline === null) { selfCheckBaseline = text; return; }
+        if (text !== selfCheckBaseline) window.location.reload();
+      })
+      .catch(function () { /* transient network hiccup — just try again next tick */ });
+  }
+
   var resizeTimer = null;
   window.addEventListener("resize", function () {
     clearTimeout(resizeTimer);
@@ -617,6 +667,8 @@
   setInterval(tickClock, 1000);
   setInterval(function () { applyRollTransform(false); }, ROLL_UPDATE_MS);
   loadAndRender();
+  checkForPageUpdate();
+  setInterval(checkForPageUpdate, REFRESH_MS);
   setInterval(loadAndRender, REFRESH_MS);
 </script>
 </body>
