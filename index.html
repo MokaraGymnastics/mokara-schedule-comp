@@ -73,9 +73,10 @@
   var API_KEY = "AIzaSyA2-7pL3Dy9-DTXbtVp2SXRQgeOOrtN86s";
   var TIMEZONE = "Asia/Singapore";
   var REFRESH_MS = 120000;
-  var WEEK1_ANCHOR = "2026-09-07"; // Monday — Week 1 of the 5-week pattern
-  var ROTATION_LENGTH = 5;
-  var WEEK_TAB_MAP = { 1: "Week 1 and 4", 2: "Week 2", 3: "Week 3 and 5", 4: "Week 1 and 4", 5: "Week 3 and 5" };
+  var WEEK1_ANCHOR = "2026-09-07"; // Monday — Week 1 of the 9-week curriculum cycle
+  // Coaches now run a clean 3-tab rotation (A/B/C) that repeats 3 times to make a 9-week
+  // curriculum cycle (weeks 1,4,7 -> A; 2,5,8 -> B; 3,6,9 -> C).
+  var TAB_CYCLE = ["A - WK 1-4-7", "B - WK 2-5-8", "C - WK 3-6-9"];
   // Squads NOT in this list are treated as Rec (named/individual squads). This screen only
   // ever shows squads in this list. Update here if the coaches add new Comp squads.
   var COMP_SQUADS = ["16s 20s 23s", "12s", "12s 16s", "Pre-Devo", "Pre-Devo = Devo 2", "23/20s", "16s"];
@@ -165,9 +166,9 @@
     var todayUTC = dateOnlyUTC(y, m, d);
     var daysSinceStart = Math.round((todayUTC - startUTC) / 86400000);
     var weekIndex0 = Math.floor(daysSinceStart / 7);
-    var cyclePos = ((weekIndex0 % ROTATION_LENGTH) + ROTATION_LENGTH) % ROTATION_LENGTH;
-    var weekNumber = cyclePos + 1;
-    var tabName = WEEK_TAB_MAP[weekNumber];
+    var weekNumber = (((weekIndex0 % 9) + 9) % 9) + 1; // displayed week, cycles 1-9
+    var tabIndex = ((weekIndex0 % 3) + 3) % 3; // which of the 3 tabs (A/B/C) applies
+    var tabName = TAB_CYCLE[tabIndex];
     var weekday = parts.weekday; // e.g. "Monday"
     var minutesOfDay = parseInt(parts.hour, 10) * 60 + parseInt(parts.minute, 10);
     var sectionLabel = weekday;
