@@ -376,9 +376,17 @@
         var segments = parseEmbeddedSegments(text, isAMSection);
         var bg = (srcCell.effectiveFormat && srcCell.effectiveFormat.backgroundColor) ? colorToHex(srcCell.effectiveFormat.backgroundColor) : "#5a6b85";
         if (segments) {
+          var prevParsed = null;
           segments.forEach(function (seg) {
             var parsed = parseActivityText(seg.text);
+            // A later segment is often a short continuation of the one before it in the same
+            // cell (e.g. "Bars (Rec Bars) 5:20-5:40 ... Fun 5:40-5:45") and carries no location
+            // of its own — show what it's a continuation of instead of leaving it bare.
+            if (!parsed.location && prevParsed) {
+              parsed = { label: parsed.label, location: prevParsed.location ? (prevParsed.label + " / " + prevParsed.location) : prevParsed.label };
+            }
             sessions.push({ label: parsed.label, location: parsed.location, start: seg.start, end: seg.end, bg: bg });
+            prevParsed = parsed;
           });
         } else {
           var startMin = ruler[col] !== undefined ? ruler[col] : null;
