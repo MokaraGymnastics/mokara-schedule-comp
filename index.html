@@ -381,9 +381,11 @@
             var parsed = parseActivityText(seg.text);
             // A later segment is often a short continuation of the one before it in the same
             // cell (e.g. "Bars (Rec Bars) 5:20-5:40 ... Fun 5:40-5:45") and carries no location
-            // of its own — show what it's a continuation of instead of leaving it bare.
+            // of its own. Rather than title the block with that short continuation word, keep
+            // the main activity's name as the title and show the continuation underneath it —
+            // e.g. titled "Bars" with "Fun" as its location line, not titled "Fun" alone.
             if (!parsed.location && prevParsed) {
-              parsed = { label: parsed.label, location: prevParsed.location ? (prevParsed.label + " / " + prevParsed.location) : prevParsed.label };
+              parsed = { label: prevParsed.label, location: parsed.label };
             }
             sessions.push({ label: parsed.label, location: parsed.location, start: seg.start, end: seg.end, bg: bg });
             prevParsed = parsed;
