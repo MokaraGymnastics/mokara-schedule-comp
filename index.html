@@ -36,7 +36,7 @@
   .squadLabel .sqTag { font-size: 0.5em; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; opacity: 0.85; margin-top: 3px; color: var(--purple-blue); }
   .squadTrack { position: relative; flex: 1 1 auto; background: rgba(255,255,255,0.05); border-radius: 10px; overflow: hidden; }
   .trackInner { position: absolute; top: 0; left: 0; height: 100%; }
-  .block { position: absolute; top: 6px; bottom: 6px; border-radius: 9px; box-sizing: border-box; padding: 14px 18px; overflow: hidden; font-size: clamp(28px, 4.6vh, 54px); line-height: 1.2; box-shadow: 0 3px 8px rgba(0,0,0,0.4); }
+  .block { position: absolute; top: 6px; bottom: 6px; border-radius: 9px; box-sizing: border-box; padding: 14px 18px; overflow: hidden; font-size: 28px; line-height: 1.2; box-shadow: 0 3px 8px rgba(0,0,0,0.4); display: flex; flex-direction: column; justify-content: center; align-items: flex-start; }
   .block .label { font-weight: 800; display: block; overflow-wrap: break-word; word-break: break-word; }
   .block .loc { display: block; opacity: 0.9; font-size: 0.78em; font-weight: 700; margin-top: 4px; overflow-wrap: break-word; word-break: break-word; }
   .block .time { display: block; opacity: 0.85; font-size: 0.62em; font-weight: 700; margin-top: 4px; white-space: normal; overflow-wrap: break-word; word-break: keep-all; }
@@ -537,6 +537,24 @@
     }
   }
 
+  // Each block's label/location/time was previously a single fixed font-size regardless of
+  // how much room the block actually had — fine for a short class, but it left a lot of dead
+  // space in anything longer. This instead picks the largest font-size that still fits inside
+  // that specific block (binary search against its own scrollWidth/scrollHeight vs its
+  // clientWidth/clientHeight), so a long class's text actually fills its box while a short
+  // class's text still just fits without overflowing or getting clipped.
+  var BLOCK_FONT_MIN = 10, BLOCK_FONT_MAX = 140;
+  function fitBlockText(el) {
+    var min = BLOCK_FONT_MIN, max = BLOCK_FONT_MAX;
+    for (var i = 0; i < 9; i++) {
+      var mid = (min + max) / 2;
+      el.style.fontSize = mid + "px";
+      var fits = el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight;
+      if (fits) { min = mid; } else { max = mid; }
+    }
+    el.style.fontSize = min + "px";
+  }
+
   function renderSchedule(squads) {
     var rowsEl = document.getElementById("rows");
     var rulerEl = document.getElementById("ruler");
@@ -620,6 +638,7 @@
         html += '<span class="time">' + formatMinutes(s.start) + " - " + formatMinutes(s.end) + "</span>";
         block.innerHTML = html;
         item.inner.appendChild(block);
+        fitBlockText(block);
       });
     });
 
@@ -643,11 +662,75 @@
     applyRollTransform(true);
   }
 
+  // A single failed fetch (a one-off network blip, or a transient hiccup in however the
+  // display device is loading this page) shouldn't blank an otherwise-working TV — that's
+  // worse than just leaving the previous schedule up for one more refresh cycle. So we only
+  // show the on-screen error after several consecutive failures in a row (a real, ongoing
+  // problem worth surfacing), or on the very first load when there's no prior schedule to
+  // fall back to. Every other time, we just log it and quietly retry next tick.
+  var FAILURE_THRESHOLD = 3;
+  var hasRenderedOnce = false;
+  var consecutiveFailures = 0;
+
+  // The big day/time clock used a fixed vh-based size, which looked fine on a short label like
+  // "Friday" but actually overflowed off the right edge of the screen (pushing the WEEK badge
+  // out of view) on the longest real label, "Saturday PM", once the hour reaches a 2-digit
+  // value (e.g. "12:59:59 PM") — that combination was never tested against before. This instead
+  // sizes the clock dynamically: the biggest font that still leaves both side labels (brand,
+  // week badge) fully visible with a safety margin, given whatever day label is actually
+  // showing. Most days it renders noticeably bigger than the old fixed size; on "Saturday PM"
+  // it backs off just enough to guarantee nothing is ever pushed off-screen.
+  function fitHeaderClock() {
+    var dayEl = document.getElementById("dayLabel");
+    var clockEl = document.getElementById("clockTime");
+    var brandEl = document.getElementById("brand");
+    var weekEl = document.getElementById("weekLabel");
+    var topBarEl = document.getElementById("topBar");
+    var headerCenterEl = document.getElementById("headerCenter");
+
+    var topBarStyle = getComputedStyle(topBarEl);
+    var paddingX = parseFloat(topBarStyle.paddingLeft) + parseFloat(topBarStyle.paddingRight);
+    var columnGap = parseFloat(topBarStyle.columnGap || topBarStyle.gap) || 0;
+    var SAFETY_MARGIN = 40; // px of guaranteed breathing room, so text never sits flush against its neighbor
+
+    // Reserve the widest possible clock string (a 2-digit hour) while measuring, so whatever
+    // size we land on stays valid for the whole day, not just the instant we happen to fit it.
+    var realClockText = clockEl.textContent;
+    clockEl.textContent = "12:59:59 PM";
+
+    var min = 40, max = 220;
+    for (var i = 0; i < 11; i++) {
+      var mid = (min + max) / 2;
+      dayEl.style.fontSize = mid + "px";
+      clockEl.style.fontSize = mid + "px";
+      var used = brandEl.getBoundingClientRect().width + headerCenterEl.getBoundingClientRect().width + weekEl.getBoundingClientRect().width + columnGap * 2;
+      var avail = topBarEl.clientWidth - paddingX;
+      if (used + SAFETY_MARGIN <= avail) { min = mid; } else { max = mid; }
+    }
+    dayEl.style.fontSize = min + "px";
+    clockEl.style.fontSize = min + "px";
+    clockEl.textContent = realClockText;
+  }
+
+  // The TV is read from across a room, where "FRIDAY" vs. "MON" makes no real difference to
+  // legibility — but the full weekday name (especially "Saturday"/"Sunday" with their AM/PM
+  // suffix) was the single biggest thing eating into the clock's available width in
+  // fitHeaderClock above. Three-letter day codes free that space up for a noticeably bigger
+  // clock on every single day, not just the short-named ones. This only changes what's
+  // DISPLAYED — info.sectionLabel itself (the full name) is still what's used below to match
+  // the day section against the sheet's own day headers, completely untouched.
+  function abbreviateDayLabel(sectionLabel) {
+    var m = sectionLabel.match(/^(\w+)(\s(AM|PM))?$/);
+    if (!m) return sectionLabel;
+    return m[1].slice(0, 3) + (m[2] || "");
+  }
+
   function loadAndRender() {
     var now = getNow();
     var info = computeWeekAndSection(now);
-    document.getElementById("dayLabel").textContent = info.sectionLabel;
+    document.getElementById("dayLabel").textContent = abbreviateDayLabel(info.sectionLabel);
     document.getElementById("weekLabel").textContent = "Week " + info.weekNumber;
+    fitHeaderClock();
 
     Promise.all([fetchGrids([info.tabName]), fetchLegend()]).then(function (results) {
       var grids = results[0];
@@ -656,7 +739,7 @@
       var sheet = grids[info.tabName];
       if (!sheet) throw new Error("Could not read tab '" + info.tabName + "'.");
       var section = extractDaySection(sheet.rowData, sheet.merges, info.sectionLabel);
-      if (!section) { renderSchedule([]); return; }
+      if (!section) { renderSchedule([]); hasRenderedOnce = true; consecutiveFailures = 0; return; }
       var squads = [];
       for (var r = section.squadStart; r < section.squadEnd; r++) {
         var row = sheet.rowData[r];
@@ -669,9 +752,15 @@
         if (sessions.length) squads.push({ name: name, category: cat, sessions: sessions });
       }
       renderSchedule(squads);
+      hasRenderedOnce = true;
+      consecutiveFailures = 0;
     }).catch(function (err) {
       console.error(err);
-      showError("Schedule data unavailable right now — it'll retry automatically.<br>" + (err && err.message ? err.message : ""));
+      consecutiveFailures++;
+      if (!hasRenderedOnce || consecutiveFailures >= FAILURE_THRESHOLD) {
+        showError("Schedule data unavailable right now — it'll retry automatically.<br>" + (err && err.message ? err.message : ""));
+      }
+      // else: keep whatever's already on screen and just try again next tick.
     });
   }
 
